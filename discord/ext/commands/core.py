@@ -231,11 +231,6 @@ class Command:
         finally:
             ctx.bot.dispatch('command_error', ctx, error)
 
-    def __get__(self, instance, owner):
-        if instance is not None:
-            self.instance = instance
-        return self
-
     @asyncio.coroutine
     def do_conversion(self, ctx, converter, argument):
         if converter is bool:
