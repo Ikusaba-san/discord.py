@@ -99,6 +99,30 @@ class _CaseInsensitiveDict(dict):
     def __setitem__(self, k, v):
         super().__setitem__(k.lower(), v)
 
+# Issue #426: Commands ext overwrites instance when adding a cog
+# https://github.com/Rapptz/discord.py/issues/426
+class _CommandProxy:
+    def __init__(self, cls, **attrs):
+        self.__cls = cls
+        self.__attrs = attrs
+        self.__name = attrs['callback'].__name__
+        self.__command = cls(**attrs)
+
+    def __getattr__(self, name):
+        return getattr(self.__command, name)
+
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self.__command
+
+        # Impossible to support __slots__ if we want to fix this.
+        if self.__name in instance.__dict__:
+            return instance.__dict__[self.__name]
+
+        instance.__dict__[self.__name] = cmd = self.__cls(**self.__attrs)
+        cmd.instance = instance
+        return cmd
+
 class Command:
     """A class that implements the protocol for a bot text command.
 
@@ -767,7 +791,7 @@ class GroupMixin:
             If the command passed is not a subclass of :class:`.Command`.
         """
 
-        if not isinstance(command, Command):
+        if not isinstance(command, (Command, _CommandProxy)):
             raise TypeError('The command passed must be a subclass of Command')
 
         if isinstance(self, Command):
@@ -1033,7 +1057,7 @@ def command(name=None, cls=None, **attrs):
 
         attrs['help'] = help_doc
         fname = name or func.__name__
-        return cls(name=fname, callback=func, checks=checks, cooldown=cooldown, **attrs)
+        return _CommandProxy(cls=cls, name=fname, callback=func, checks=checks, cooldown=cooldown, **attrs)
 
     return decorator
 
